@@ -1,0 +1,191 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' 'unsafe-inline' https://fonts.gstatic.com; img-src 'self' data: blob: https://pfst.cf2.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com; media-src 'self' data: blob: https://pfst.cf2.poecdn.net https://i.imgur.com https://wikimedia.org; frame-src 'self' https://www.youtube.com; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>容器资源使用监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 50vh;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        #file-input {
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>容器资源使用监控</h1>
+        <input type="file" id="file-input" accept=".csv">
+        <div class="chart-container">
+            <canvas id="cpuChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="memoryChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+        const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+        let cpuChart, memoryChart;
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    const data = results.data;
+                    createCharts(data);
+                }
+            });
+        });
+
+        function createCharts(data) {
+            const timestamps = [...new Set(data.map(row => row.Timestamp))];
+            const hosts = [...new Set(data.map(row => row.Host))];
+            
+            createCPUChart(data, timestamps, hosts);
+            createMemoryChart(data, timestamps, hosts);
+        }
+
+        function createCPUChart(data, timestamps, hosts) {
+            const datasets = hosts.map(host => ({
+                label: `${host} - CPU %`,
+                data: timestamps.map(timestamp => {
+                    const row = data.find(r => r.Timestamp === timestamp && r.Host === host);
+                    return row ? parseFloat(row['CPU %']) : null;
+                }),
+                borderColor: getRandomColor(),
+                fill: false
+            }));
+
+            if (cpuChart) {
+                cpuChart.destroy();
+            }
+
+            cpuChart = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '时间'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'CPU 使用率 (%)'
+                            },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '容器 CPU 使用率随时间变化'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function createMemoryChart(data, timestamps, hosts) {
+            const datasets = hosts.map(host => ({
+                label: `${host} - Memory %`,
+                data: timestamps.map(timestamp => {
+                    const row = data.find(r => r.Timestamp === timestamp && r.Host === host);
+                    return row ? parseFloat(row['Memory %']) : null;
+                }),
+                borderColor: getRandomColor(),
+                fill: false
+            }));
+
+            if (memoryChart) {
+                memoryChart.destroy();
+            }
+
+            memoryChart = new Chart(memoryCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '时间'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: '内存使用率 (%)'
+                            },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '容器内存使用率随时间变化'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function getRandomColor() {
+            const r = Math.floor(Math.random() * 255);
+            const g = Math.floor(Math.random() * 255);
+            const b = Math.floor(Math.random() * 255);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+    </script>
+
+
+</body></html>
